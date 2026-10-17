@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js
+admin/.next/
+admin/out/
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+mobile/ios/.symlinks/
+mobile/ios/Pods/
+mobile/ios/Podfile.lock
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.log
+
+# Supabase Local
+supabase/.temp/
