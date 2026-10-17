@@ -7,6 +7,7 @@ class AdService {
   static bool _isInitialized = false;
 
   static Future<void> initialize() async {
+    if (kIsWeb) return;
     if (_isInitialized) return;
     try {
       await MobileAds.instance.initialize();
@@ -18,6 +19,7 @@ class AdService {
 
   /// Get the appropriate platform banner ad unit ID (Test IDs in development)
   static String get bannerAdUnitId {
+    if (kIsWeb) return '';
     if (Platform.isAndroid) {
       return AppConfig.admobBannerUnitIdAndroid;
     } else if (Platform.isIOS) {

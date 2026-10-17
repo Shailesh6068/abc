@@ -33,7 +33,7 @@ class _RaceResultsScreenState extends ConsumerState<RaceResultsScreen> {
           .from('race_results')
           .select('*, profiles(display_name, avatar_url)')
           .eq('race_id', widget.raceId)
-          .order('rank', {ascending: true});
+          .order('rank', ascending: true);
 
       final currentUserId = SupabaseService.currentUser?.id;
       final resultsList = List<Map<String, dynamic>>.from(data);

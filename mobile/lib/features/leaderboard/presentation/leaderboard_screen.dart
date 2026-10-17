@@ -45,7 +45,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
           .from('leaderboard_entries')
           .select('*, profiles(display_name, avatar_url)')
           .eq('sport', _selectedSport)
-          .order('rating', {ascending: false})
+          .order('rating', ascending: false)
           .limit(50);
 
       if (mounted) {
