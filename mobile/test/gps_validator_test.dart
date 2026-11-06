@@ -106,5 +106,66 @@ void main() {
       expect(r2.isValid, isFalse);
       expect(r2.result, equals(GpsValidationResult.outOfSequence));
     });
+
+    test('Rejects negative or zero time delta (clock skew or duplicate timestamp)', () {
+      final validator = GpsValidator(sport: 'running');
+      final now = DateTime.now();
+
+      validator.validateSample(
+        sequenceNo: 1,
+        latitude: 13.0,
+        longitude: 80.0,
+        accuracyMeters: 5.0,
+        recordedAt: now,
+      );
+
+      // Same timestamp or earlier timestamp with higher sequence
+      final r2 = validator.validateSample(
+        sequenceNo: 2,
+        latitude: 13.0001,
+        longitude: 80.0,
+        accuracyMeters: 5.0,
+        recordedAt: now.subtract(const Duration(seconds: 1)),
+      );
+
+      expect(r2.isValid, isFalse);
+      expect(r2.result, equals(GpsValidationResult.outOfSequence));
+
+      final r3 = validator.validateSample(
+        sequenceNo: 3,
+        latitude: 13.0001,
+        longitude: 80.0,
+        accuracyMeters: 5.0,
+        recordedAt: now,
+      );
+
+      expect(r3.isValid, isFalse);
+      expect(r3.result, equals(GpsValidationResult.outOfSequence));
+    });
+
+    test('Rejects teleportation jumps (>200m in <2s)', () {
+      final validator = GpsValidator(sport: 'motorbike');
+      final now = DateTime.now();
+
+      validator.validateSample(
+        sequenceNo: 1,
+        latitude: 13.0000,
+        longitude: 80.0000,
+        accuracyMeters: 5.0,
+        recordedAt: now,
+      );
+
+      // Jump 500m in 1 second
+      final r2 = validator.validateSample(
+        sequenceNo: 2,
+        latitude: 13.0045,
+        longitude: 80.0000,
+        accuracyMeters: 5.0,
+        recordedAt: now.add(const Duration(seconds: 1)),
+      );
+
+      expect(r2.isValid, isFalse);
+      expect(r2.result, equals(GpsValidationResult.teleportationJump));
+    });
   });
 }

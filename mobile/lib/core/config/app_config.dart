@@ -7,18 +7,18 @@ class AppConfig {
   // Backend Endpoints (Can be loaded from environment or defaults)
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://placeholder-project.supabase.co',
+    defaultValue: 'https://zifkhsscgjojtmzwbqio.supabase.co',
   );
 
   static const String supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'placeholder-anon-key',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppZmtoc3NjZ2pvanRtendicWlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMjcyODEsImV4cCI6MjEwNzgwMzI4MX0.J8018X2dah2-YBhRyqZDCr90uio1eCnMwybfk728nBI',
   );
 
   // Google Maps API Key
   static const String mapsApiKey = String.fromEnvironment(
     'MAPS_API_KEY',
-    defaultValue: 'placeholder-maps-key',
+    defaultValue: 'AIzaSyDmDUvCYOhDgSiq6lEx1R7V4JepIyHB0KQ',
   );
 
   // Google AdMob Configuration (Official Google Test Ad Unit IDs)

@@ -22,15 +22,29 @@ class RaceParticipant extends Equatable {
   });
 
   factory RaceParticipant.fromJson(Map<String, dynamic> json) {
+    String displayName = 'Racer';
+    String? avatarUrl;
+    final prof = json['profiles'];
+    if (prof is Map) {
+      displayName = prof['display_name'] as String? ?? 'Racer';
+      avatarUrl = prof['avatar_url'] as String?;
+    } else if (prof is List && prof.isNotEmpty && prof.first is Map) {
+      displayName = (prof.first as Map)['display_name'] as String? ?? 'Racer';
+      avatarUrl = (prof.first as Map)['avatar_url'] as String?;
+    }
+
+    final joined = json['joined_at'] != null ? (DateTime.tryParse(json['joined_at'] as String) ?? DateTime.now()) : DateTime.now();
+    final ready = json['ready_at'] != null ? DateTime.tryParse(json['ready_at'] as String) : null;
+
     return RaceParticipant(
       userId: json['user_id'] as String,
-      displayName: json['profiles']?['display_name'] as String? ?? 'Racer',
-      avatarUrl: json['profiles']?['avatar_url'] as String?,
+      displayName: displayName,
+      avatarUrl: avatarUrl,
       status: json['status'] as String? ?? 'joined',
-      joinedAt: DateTime.parse(json['joined_at'] as String),
-      readyAt: json['ready_at'] != null ? DateTime.parse(json['ready_at'] as String) : null,
+      joinedAt: joined,
+      readyAt: ready,
       validatedDistanceM: (json['validated_distance_m'] as num?)?.toDouble() ?? 0.0,
-      finishTimeMs: json['finish_time_ms'] as int?,
+      finishTimeMs: (json['finish_time_ms'] as num?)?.toInt(),
     );
   }
 
@@ -70,6 +84,11 @@ class RaceModel extends Equatable {
   });
 
   factory RaceModel.fromJson(Map<String, dynamic> json, {List<RaceParticipant> participants = const []}) {
+    Map<String, dynamic> config = {};
+    if (json['configuration'] is Map) {
+      config = Map<String, dynamic>.from(json['configuration'] as Map);
+    }
+
     return RaceModel(
       id: json['id'] as String,
       creatorId: json['creator_id'] as String,
@@ -77,12 +96,12 @@ class RaceModel extends Equatable {
       mode: json['mode'] as String,
       visibility: json['visibility'] as String? ?? 'public',
       status: json['status'] as String,
-      participantLimit: json['participant_limit'] as int? ?? 4,
+      participantLimit: (json['participant_limit'] as num?)?.toInt() ?? 4,
       routeId: json['route_id'] as String?,
-      configuration: (json['configuration'] as Map<String, dynamic>?) ?? {},
-      scheduledStartAt: json['scheduled_start_at'] != null ? DateTime.parse(json['scheduled_start_at'] as String) : null,
-      actualStartAt: json['actual_start_at'] != null ? DateTime.parse(json['actual_start_at'] as String) : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      configuration: config,
+      scheduledStartAt: json['scheduled_start_at'] != null ? DateTime.tryParse(json['scheduled_start_at'] as String) : null,
+      actualStartAt: json['actual_start_at'] != null ? DateTime.tryParse(json['actual_start_at'] as String) : null,
+      createdAt: json['created_at'] != null ? (DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()) : DateTime.now(),
       participants: participants,
     );
   }

@@ -20,6 +20,7 @@ mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 mobile/.packages
 mobile/build/
+mobile/android/build/
 mobile/android/app/debug/
 mobile/android/app/profile/
 mobile/android/app/release/
@@ -34,3 +35,12 @@ Thumbs.db
 
 # Supabase Local
 supabase/.temp/
+
+# Build artifacts and binaries
+*.apk
+*.aab
+
+# Temp screenshots and references
+*.png
+fd/
+

@@ -27,16 +27,26 @@ class _RaceResultsScreenState extends ConsumerState<RaceResultsScreen> {
     _fetchOfficialResults();
   }
 
-  Future<void> _fetchOfficialResults() async {
+  Future<void> _fetchOfficialResults([int attempt = 0]) async {
     try {
       final data = await SupabaseService.client
           .from('race_results')
           .select('*, profiles(display_name, avatar_url)')
           .eq('race_id', widget.raceId)
-          .order('rank', ascending: true);
+          .order('rank', ascending: true)
+          .timeout(const Duration(milliseconds: 1500));
 
       final currentUserId = SupabaseService.currentUser?.id;
       final resultsList = List<Map<String, dynamic>>.from(data);
+
+      if (resultsList.isEmpty && attempt < 3) {
+        await Future.delayed(const Duration(milliseconds: 900));
+        if (mounted) {
+          await _fetchOfficialResults(attempt + 1);
+          return;
+        }
+      }
+
       final myRes = resultsList.where((r) => r['user_id'] == currentUserId).firstOrNull;
 
       if (mounted) {
@@ -57,53 +67,97 @@ class _RaceResultsScreenState extends ConsumerState<RaceResultsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Dispute Result', style: TextStyle(color: AppColors.textPrimary)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.accentAmber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.flag_outlined, color: AppColors.accentAmber, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text('Dispute Result', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800)),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
               'If you noticed GPS spoofing or foul play, submit a report for review by our moderation panel.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: reasonController,
               maxLines: 3,
-              style: const TextStyle(color: AppColors.textPrimary),
+              style: AppTypography.bodyLarge,
               decoration: InputDecoration(
                 hintText: 'Describe the issue...',
                 filled: true,
                 fillColor: AppColors.surfaceElevated,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (reasonController.text.trim().isNotEmpty) {
-                await SupabaseService.client.from('moderation_reports').insert({
-                  'reporter_id': SupabaseService.currentUser?.id,
-                  'race_id': widget.raceId,
-                  'category': 'suspicious_results',
-                  'description': reasonController.text.trim(),
-                  'status': 'OPEN',
-                });
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Dispute submitted for admin review.')),
-                  );
-                }
-              }
+            onPressed: () {
+              reasonController.dispose();
+              Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen),
-            child: const Text('SUBMIT DISPUTE', style: TextStyle(color: AppColors.textInverse)),
+            child: const Text('CANCEL', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: AppColors.greenGradient,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: ElevatedButton(
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isNotEmpty) {
+                  try {
+                    await SupabaseService.client.from('moderation_reports').insert({
+                      'reporter_id': SupabaseService.currentUser?.id,
+                      'race_id': widget.raceId,
+                      'category': 'suspicious_results',
+                      'description': reason,
+                      'status': 'OPEN',
+                    });
+                    if (ctx.mounted) {
+                      reasonController.dispose();
+                      Navigator.pop(ctx);
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Dispute submitted for admin review.')),
+                      );
+                    }
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      reasonController.dispose();
+                      Navigator.pop(ctx);
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not submit dispute: $e')),
+                      );
+                    }
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('SUBMIT', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
           ),
         ],
       ),
@@ -121,7 +175,11 @@ class _RaceResultsScreenState extends ConsumerState<RaceResultsScreen> {
 
     final myRank = _userResult?['rank'] ?? 1;
     final isPodium = myRank <= 3;
+    final isWinner = myRank == 1;
     final xpEarned = myRank == 1 ? 100 : (myRank == 2 ? 60 : (myRank == 3 ? 40 : 20));
+
+    // Colors based on placement
+    final rankColor = myRank == 1 ? AppColors.gold : (myRank == 2 ? AppColors.silver : (myRank == 3 ? AppColors.bronze : AppColors.primaryCyan));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -130,174 +188,300 @@ class _RaceResultsScreenState extends ConsumerState<RaceResultsScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
                 child: Column(
                   children: [
-                    const SizedBox(height: 12),
-                    // Podium Banner Icon
+                    // Victory/Result hero banner
                     Container(
-                      width: 80,
-                      height: 80,
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
                       decoration: BoxDecoration(
-                        color: isPodium ? AppColors.primaryGreen.withOpacity(0.15) : AppColors.surface,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isPodium ? AppColors.primaryGreen : AppColors.borderHighlight,
-                          width: 2,
+                        gradient: isWinner
+                            ? const LinearGradient(
+                                colors: [Color(0xFF0D1117), Color(0xFF1A1A2E)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : const LinearGradient(
+                                colors: [Color(0xFF0D1117), Color(0xFF16213E)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(32),
+                          bottomRight: Radius.circular(32),
                         ),
                       ),
-                      child: Icon(
-                        isPodium ? Icons.emoji_events : Icons.sports_score,
-                        color: isPodium ? AppColors.primaryGreen : AppColors.textSecondary,
-                        size: 44,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      myRank == 1 ? 'VICTORY!' : 'RACE COMPLETE',
-                      style: AppTypography.displayLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Official Verified Standings • Stage $myRank${myRank == 1 ? "st" : (myRank == 2 ? "nd" : (myRank == 3 ? "rd" : "th"))} Place',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // User Summary Card (XP & Distance)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.primaryGreen.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      child: Column(
                         children: [
-                          Column(
-                            children: [
-                              const Text('XP EARNED', style: AppTypography.labelSmall),
-                              const SizedBox(height: 4),
-                              Text('+$xpEarned XP', style: const TextStyle(color: AppColors.primaryGreen, fontSize: 22, fontWeight: FontWeight.bold)),
-                            ],
+                          // Trophy / icon
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: rankColor.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: rankColor, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(color: rankColor.withValues(alpha: 0.4), blurRadius: 24),
+                              ],
+                            ),
+                            child: Icon(
+                              isPodium ? Icons.emoji_events : Icons.sports_score,
+                              color: rankColor,
+                              size: 46,
+                            ),
                           ),
-                          Container(width: 1, height: 40, color: AppColors.borderSubtle),
-                          Column(
+                          const SizedBox(height: 16),
+                          Text(
+                            isWinner ? '🏆 VICTORY!' : (isPodium ? '🎉 PODIUM FINISH!' : 'RACE COMPLETE'),
+                            style: AppTypography.displayLarge.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: isWinner ? 34 : 28,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Official Verified Result • $myRank${myRank == 1 ? "st" : (myRank == 2 ? "nd" : (myRank == 3 ? "rd" : "th"))} Place',
+                            style: const TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // XP + Distance stats
+                          Row(
                             children: [
-                              const Text('VERIFIED DISTANCE', style: AppTypography.labelSmall),
-                              const SizedBox(height: 4),
-                              Text(
-                                GeoUtils.formatDistance((_userResult?['verified_distance_m'] as num?)?.toDouble() ?? 1000.0),
-                                style: const TextStyle(color: AppColors.primaryCyan, fontSize: 22, fontWeight: FontWeight.bold),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Text('XP EARNED', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '+$xpEarned XP',
+                                        style: const TextStyle(color: AppColors.primaryGreen, fontSize: 22, fontWeight: FontWeight.w900),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Text('DISTANCE', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        GeoUtils.formatDistance((_userResult?['verified_distance_m'] as num?)?.toDouble() ?? 1000.0),
+                                        style: const TextStyle(color: AppColors.primaryCyan, fontSize: 22, fontWeight: FontWeight.w900),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 28),
 
-                    // Full Standings Table
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('OFFICIAL RESULTS TABLE', style: AppTypography.labelSmall),
-                    ),
-                    const SizedBox(height: 10),
-
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _results.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final r = _results[index];
-                        final rank = r['rank'] as int? ?? (index + 1);
-                        final name = r['profiles']?['display_name'] ?? 'Racer';
-                        final elapsedMs = r['elapsed_ms'] as int? ?? 0;
-                        final duration = Duration(milliseconds: elapsedMs);
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: rank == 1 ? AppColors.primaryGreen : AppColors.borderSubtle,
-                            ),
-                          ),
-                          child: Row(
+                    // Results table
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
                               Container(
-                                width: 32,
-                                height: 32,
+                                padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: rank == 1
-                                      ? AppColors.primaryGreen
-                                      : (rank == 2 ? AppColors.primaryCyan : AppColors.surface),
-                                  shape: BoxShape.circle,
+                                  color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$rank',
-                                  style: TextStyle(
-                                    color: rank <= 2 ? AppColors.textInverse : AppColors.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                child: const Icon(Icons.format_list_numbered, color: AppColors.primaryGreen, size: 16),
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-                                ),
-                              ),
-                              Text(
-                                GeoUtils.formatDuration(duration),
-                                style: const TextStyle(
-                                  color: AppColors.timerGlow,
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                              const SizedBox(width: 8),
+                              const Text('OFFICIAL RESULTS', style: AppTypography.labelSmall),
                             ],
                           ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
+                          const SizedBox(height: 14),
 
-                    // Dispute action
-                    TextButton.icon(
-                      onPressed: _showDisputeDialog,
-                      icon: const Icon(Icons.flag_outlined, color: AppColors.textMuted, size: 18),
-                      label: const Text('Dispute Result / Report Cheating', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _results.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final r = _results[index];
+                              final rank = (r['rank'] as num?)?.toInt() ?? (index + 1);
+                              String name = 'Racer';
+                              final prof = r['profiles'];
+                              if (prof is Map) {
+                                name = prof['display_name'] as String? ?? 'Racer';
+                              } else if (prof is List && prof.isNotEmpty && prof.first is Map) {
+                                name = (prof.first as Map)['display_name'] as String? ?? 'Racer';
+                              }
+                              name = name.trim().isEmpty ? 'Racer' : name;
+                              final elapsedMs = (r['elapsed_ms'] as num?)?.toInt() ?? 0;
+                              final duration = Duration(milliseconds: elapsedMs);
+                              final isMe = r['user_id'] == SupabaseService.currentUser?.id;
+
+                              Color podiumColor = AppColors.borderSubtle;
+                              if (rank == 1) podiumColor = AppColors.gold;
+                              if (rank == 2) podiumColor = AppColors.silver;
+                              if (rank == 3) podiumColor = AppColors.bronze;
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? AppColors.primaryGreen.withValues(alpha: 0.06)
+                                      : AppColors.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isMe
+                                        ? AppColors.primaryGreen.withValues(alpha: 0.4)
+                                        : (rank <= 3 ? podiumColor.withValues(alpha: 0.4) : AppColors.borderSubtle),
+                                    width: isMe ? 1.5 : 1,
+                                  ),
+                                  boxShadow: AppColors.cardShadow,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Rank badge
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: rank <= 3 ? podiumColor.withValues(alpha: 0.15) : AppColors.surfaceElevated,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: rank <= 3 ? podiumColor : AppColors.borderHighlight,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '$rank',
+                                        style: TextStyle(
+                                          color: rank <= 3 ? podiumColor : AppColors.textSecondary,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: TextStyle(
+                                              color: AppColors.textPrimary,
+                                              fontWeight: isMe ? FontWeight.w900 : FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          if (isMe) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primaryGreen,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'YOU',
+                                                style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      GeoUtils.formatDuration(duration),
+                                      style: const TextStyle(
+                                        color: AppColors.primaryGreen,
+                                        fontFamily: 'monospace',
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    if (rank <= 3)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 6),
+                                        child: Text(
+                                          rank == 1 ? '🥇' : (rank == 2 ? '🥈' : '🥉'),
+                                          style: const TextStyle(fontSize: 18),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Dispute
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: _showDisputeDialog,
+                              icon: const Icon(Icons.flag_outlined, color: AppColors.textMuted, size: 16),
+                              label: const Text(
+                                'Dispute Result / Report Cheating',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
 
-            // Safe Banner Ad below results (Post-race only!)
-            const SafeAdBannerWidget(
-              screenName: 'results',
-              isLiveRacing: false,
-            ),
+            // Ad banner
+            const SafeAdBannerWidget(screenName: 'results', isLiveRacing: false),
 
-            // Bottom Return Button
+            // Return home button
             Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: ElevatedButton(
-                onPressed: () => context.go('/home'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryGreen,
-                  foregroundColor: AppColors.textInverse,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  minimumSize: const Size.fromHeight(50),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: AppColors.greenGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: AppColors.greenGlowShadow,
                 ),
-                child: const Text('RETURN TO HOME', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go('/home'),
+                  icon: const Icon(Icons.home, size: 20),
+                  label: const Text(
+                    'RETURN TO HOME',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    minimumSize: const Size.fromHeight(56),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
               ),
             ),
           ],

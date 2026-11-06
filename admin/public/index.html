@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RaceZone - Download & Run on Mobile</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0B0E14;
+      color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #151A22;
+      border: 1px solid #00E676;
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0, 230, 118, 0.2);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(0, 230, 118, 0.15);
+      color: #00E676;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 900;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    p.subtitle {
+      color: #94A3B8;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .btn-download {
+      display: block;
+      background: #00E676;
+      color: #0B0E14;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 18px 24px;
+      border-radius: 14px;
+      text-decoration: none;
+      box-shadow: 0 4px 18px rgba(0, 230, 118, 0.4);
+      transition: transform 0.15s ease, background 0.15s ease;
+      margin-bottom: 20px;
+    }
+    .btn-download:active {
+      transform: scale(0.98);
+      background: #00C853;
+    }
+    .steps {
+      text-align: left;
+      background: #0B0E14;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #1E293B;
+      font-size: 13px;
+      color: #CBD5E1;
+      line-height: 1.6;
+    }
+    .steps ol {
+      padding-left: 20px;
+    }
+    .steps li {
+      margin-bottom: 8px;
+    }
+    .footer {
+      margin-top: 20px;
+      color: #64748B;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Verified Fresh Build</div>
+    <h1>RaceZone Mobile</h1>
+    <p class="subtitle">Real-Time GPS Racing App for Android (Running, Cycling, Motorbike)</p>
+    
+    <a href="/app-debug.apk" class="btn-download" download>
+      ⚡ DOWNLOAD APK (Direct Install)
+    </a>
+
+    <div class="steps">
+      <strong>Installation Steps on Mobile:</strong>
+      <ol>
+        <li>Tap the <strong>Download APK</strong> button above on your phone.</li>
+        <li>When downloaded, open the notification or Files app and tap <code>app-debug.apk</code>.</li>
+        <li>If prompted, allow <em>"Install unknown apps"</em> from your browser or file manager.</li>
+        <li>Tap <strong>Install</strong> &amp; grant GPS Location permission when asked.</li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      Version 1.0.0 • Size: ~186 MB • Ready for testing
+    </div>
+  </div>
+</body>
+</html>

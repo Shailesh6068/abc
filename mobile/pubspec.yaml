@@ -28,7 +28,7 @@ dependencies:
   google_maps_flutter: ^2.6.0
   
   # Advertising (Google AdMob official SDK)
-  google_mobile_ads: ^5.1.0
+  google_mobile_ads: ^9.1.0
   
   # Utilities
   intl: ^0.19.0

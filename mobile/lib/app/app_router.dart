@@ -104,13 +104,18 @@ class _SplashScreenState extends State<_SplashScreen> {
   }
 
   Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(milliseconds: 900));
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
 
-    if (SupabaseService.isAuthenticated) {
-      context.go('/home');
-    } else {
-      context.go('/login');
+    // Automatically establish/restore authenticated Supabase session
+    await SupabaseService.ensureAuthenticatedSession();
+
+    if (mounted) {
+      if (SupabaseService.isAuthenticated) {
+        context.go('/home');
+      } else {
+        context.go('/login');
+      }
     }
   }
 
@@ -129,7 +134,7 @@ class _SplashScreenState extends State<_SplashScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.primaryGreen, width: 2),
                 boxShadow: [
-                  BoxShadow(color: AppColors.primaryGreen.withOpacity(0.3), blurRadius: 20),
+                  BoxShadow(color: AppColors.primaryGreen.withValues(alpha: 0.3), blurRadius: 20),
                 ],
               ),
               child: const Icon(Icons.flash_on, color: AppColors.primaryGreen, size: 54),

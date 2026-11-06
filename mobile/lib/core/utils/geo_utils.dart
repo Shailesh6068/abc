@@ -48,8 +48,11 @@ class GeoUtils {
 
   /// Calculate running pace string (e.g. "4:32 /km") from speed in m/s
   static String formatRunningPace(double speedMps) {
-    if (speedMps <= 0.2) return "--:-- /km"; // Stationary
+    // Speeds below 0.8 m/s (~2.9 km/h) are stationary or indoor GPS jitter
+    if (speedMps < 0.8) return "--:-- /km";
     final secondsPerKm = 1000.0 / speedMps;
+    // Paces slower than 15:00 /km (900s) are walking or paused
+    if (secondsPerKm > 900) return "--:-- /km";
     final minutes = (secondsPerKm / 60).floor();
     final seconds = (secondsPerKm % 60).floor();
     return '$minutes:${seconds.toString().padLeft(2, '0')} /km';

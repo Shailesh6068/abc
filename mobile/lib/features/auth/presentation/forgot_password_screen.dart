@@ -39,11 +39,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       await authRepo.sendPasswordResetEmail(email);
-      setState(() => _isSuccess = true);
+      if (mounted) setState(() => _isSuccess = true);
     } catch (e) {
-      setState(() => _errorMessage = e.toString().replaceAll('Exception:', '').trim());
+      if (mounted) setState(() => _errorMessage = e.toString().replaceAll('Exception:', '').trim());
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -52,84 +52,186 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.backgroundSecondary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.lock_reset, color: AppColors.primaryGreen, size: 18),
+            ),
+            const SizedBox(width: 10),
+            const Text('Reset Password', style: AppTypography.titleLarge),
+          ],
+        ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 20),
-              const Text('Reset Password', style: AppTypography.displayMedium),
-              const SizedBox(height: 8),
-              const Text(
-                'Enter your account email to receive recovery instructions.',
-                style: AppTypography.bodyMedium,
+              const SizedBox(height: 12),
+
+              // Info card
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.borderSubtle),
+                  boxShadow: AppColors.cardShadow,
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF0D1117), Color(0xFF1A1A2E)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: AppColors.cardShadow,
+                      ),
+                      child: const Icon(Icons.lock_reset, color: Colors.white, size: 30),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Forgot your password?',
+                      style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter your account email and we\'ll send you secure recovery instructions.',
+                      style: AppTypography.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               if (_isSuccess)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryGreen.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.5)),
+                    color: AppColors.primaryGreen.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primaryGreen.withValues(alpha: 0.4)),
                   ),
-                  child: const Text(
-                    'Password reset email sent! Check your inbox.',
-                    style: TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
+                  child: Column(
+                    children: [
+                      const Icon(Icons.mark_email_read_outlined, color: AppColors.primaryGreen, size: 40),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Reset Link Sent!',
+                        style: TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.w800, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Check your inbox and follow the link to reset your password.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: () => context.pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primaryGreen,
+                          side: const BorderSide(color: AppColors.primaryGreen),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('BACK TO SIGN IN', style: TextStyle(fontWeight: FontWeight.w800)),
+                      ),
+                    ],
                   ),
                 )
               else ...[
                 if (_errorMessage != null)
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
-                      color: AppColors.accentRose.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.accentRose.withOpacity(0.5)),
+                      color: AppColors.accentRose.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.accentRose.withValues(alpha: 0.4)),
                     ),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: AppColors.accentRose, fontSize: 13),
-                      textAlign: TextAlign.center,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.accentRose, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: AppColors.accentRose, fontSize: 13),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: AppTypography.bodyLarge,
                   decoration: InputDecoration(
                     labelText: 'Email Address',
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primaryGreen),
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    hintText: 'your@email.com',
+                    prefixIcon: Container(
+                      margin: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.email_outlined, color: AppColors.primaryGreen, size: 18),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _handleReset,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryGreen,
-                    foregroundColor: AppColors.textInverse,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.greenGradient,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: AppColors.greenGlowShadow,
                   ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('SEND RESET LINK', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleReset,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.send_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'SEND RESET LINK',
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
               ],
             ],

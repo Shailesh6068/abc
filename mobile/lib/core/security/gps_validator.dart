@@ -99,46 +99,47 @@ class GpsValidator {
 
     final durationSeconds = recordedAt.difference(_lastTimestamp!).inMilliseconds / 1000.0;
 
-    if (durationSeconds > 0.05) {
-      final speedMps = distanceMeters / durationSeconds;
+    // Check for negative or zero duration (system clock skew or duplicate timestamps)
+    if (durationSeconds <= 0) {
+      return const GpsValidationReport(
+        isValid: false,
+        result: GpsValidationResult.outOfSequence,
+      );
+    }
 
-      // 5. Sport physical speed limit check
-      if (speedMps > maxAllowedSpeedMps) {
-        return GpsValidationReport(
-          isValid: false,
-          result: GpsValidationResult.excessiveSpeed,
-          calculatedSpeedMps: speedMps,
-          distanceDeltaMeters: distanceMeters,
-        );
-      }
+    final speedMps = distanceMeters / durationSeconds;
 
-      // 6. Teleportation jump check (> 200m in < 2 seconds)
-      if (distanceMeters > 200.0 && durationSeconds < 2.0) {
-        return GpsValidationReport(
-          isValid: false,
-          result: GpsValidationResult.teleportationJump,
-          calculatedSpeedMps: speedMps,
-          distanceDeltaMeters: distanceMeters,
-        );
-      }
-
-      // Update state on valid sample
-      _lastSequence = sequenceNo;
-      _lastLat = latitude;
-      _lastLng = longitude;
-      _lastTimestamp = recordedAt;
-
+    // 5. Teleportation jump check (> 200m in < 2 seconds)
+    if (distanceMeters > 200.0 && durationSeconds < 2.0) {
       return GpsValidationReport(
-        isValid: true,
-        result: GpsValidationResult.valid,
+        isValid: false,
+        result: GpsValidationResult.teleportationJump,
         calculatedSpeedMps: speedMps,
         distanceDeltaMeters: distanceMeters,
       );
     }
 
-    return const GpsValidationReport(
+    // 6. Sport physical speed limit check
+    if (speedMps > maxAllowedSpeedMps) {
+      return GpsValidationReport(
+        isValid: false,
+        result: GpsValidationResult.excessiveSpeed,
+        calculatedSpeedMps: speedMps,
+        distanceDeltaMeters: distanceMeters,
+      );
+    }
+
+    // Update state on valid sample
+    _lastSequence = sequenceNo;
+    _lastLat = latitude;
+    _lastLng = longitude;
+    _lastTimestamp = recordedAt;
+
+    return GpsValidationReport(
       isValid: true,
       result: GpsValidationResult.valid,
+      calculatedSpeedMps: speedMps,
+      distanceDeltaMeters: distanceMeters,
     );
   }
 

@@ -87,7 +87,7 @@ class _SafeAdBannerWidgetState extends State<SafeAdBannerWidget> {
         height: 50,
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         decoration: BoxDecoration(
-          color: AppColors.surface.withOpacity(0.4),
+          color: AppColors.surface.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.borderSubtle),
         ),

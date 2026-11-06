@@ -18,7 +18,7 @@ class AppTypography {
 
   static const TextStyle titleLarge = TextStyle(
     fontSize: 20,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
   );
 
@@ -42,17 +42,17 @@ class AppTypography {
 
   static const TextStyle labelSmall = TextStyle(
     fontSize: 11,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.8,
     color: AppColors.textMuted,
   );
 
-  // Digital High-Contrast Telemetry Typography (for timer & speedometers)
+  // Telemetry Typography
   static const TextStyle telemetryGiant = TextStyle(
     fontSize: 54,
     fontWeight: FontWeight.w900,
     fontFamily: 'monospace',
-    color: AppColors.timerGlow,
+    color: AppColors.primaryGreen,
     letterSpacing: 1.5,
   );
 
