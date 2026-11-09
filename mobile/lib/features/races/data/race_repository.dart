@@ -219,13 +219,14 @@ class RaceRepository {
       await SupabaseService.ensureAuthenticatedSession();
     }
     try {
-      // Discard any abandoned lobby created more than 15 minutes ago
-      final cutoff = DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String();
+      // Discard any abandoned lobby created more than 10 minutes ago
+      final cutoff = DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String();
       var query = _client
           .from('races')
           .select('*, race_participants(*, profiles(display_name, avatar_url))')
           .eq('status', 'WAITING')
           .eq('visibility', 'public')
+          .neq('mode', 'head_to_head')
           .gte('created_at', cutoff);
 
       if (sport != null && sport != 'all') {
@@ -237,6 +238,12 @@ class RaceRepository {
       for (final item in data as List) {
         final rawStatus = item['status'] as String? ?? '';
         if (rawStatus != 'WAITING') continue;
+
+        // Discard any private 1v1 challenges
+        final rawMode = item['mode'] as String? ?? '';
+        if (rawMode == 'head_to_head') continue;
+        final config = item['configuration'] as Map<String, dynamic>?;
+        if (config != null && config['challengee_id'] != null) continue;
 
         final partsList = (item['race_participants'] as List? ?? [])
             .map((p) => RaceParticipant.fromJson(Map<String, dynamic>.from(p as Map)))
@@ -251,7 +258,7 @@ class RaceRepository {
       return races;
     } catch (e) {
       return _localRaces.values
-          .where((r) => r.status == 'WAITING' && (sport == null || sport == 'all' || r.sport == sport) && r.participants.isNotEmpty)
+          .where((r) => r.status == 'WAITING' && r.mode != 'head_to_head' && (sport == null || sport == 'all' || r.sport == sport) && r.participants.isNotEmpty)
           .toList();
     }
   }

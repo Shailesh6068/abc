@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:racezone/core/constants/app_colors.dart';
 import 'package:racezone/core/constants/app_typography.dart';
 import 'package:racezone/core/network/supabase_client.dart';
+import 'package:racezone/features/races/data/race_repository.dart';
 
 class LeaderboardScreen extends ConsumerStatefulWidget {
   const LeaderboardScreen({super.key});
@@ -387,6 +388,9 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
                       final xp = (item['xp'] as num?)?.toInt() ?? 0;
                       final wins = (item['wins'] as num?)?.toInt() ?? 0;
                       final initial = name.isNotEmpty ? name[0].toUpperCase() : 'R';
+                      final myUserId = SupabaseService.currentUser?.id;
+                      final targetUserId = item['user_id'] as String?;
+                      final isMe = targetUserId != null && targetUserId == myUserId;
 
                       // Alternate subtle row background
                       final isEven = (rank % 2 == 0);
@@ -467,21 +471,32 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
                               ],
                             ),
                             const SizedBox(width: 4),
-                            IconButton(
-                              icon: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.greenGradient,
-                                  borderRadius: BorderRadius.circular(8),
+                            if (!isMe)
+                              IconButton(
+                                icon: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.greenGradient,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.flash_on, color: Colors.white, size: 14),
                                 ),
-                                child: const Icon(Icons.flash_on, color: Colors.white, size: 14),
+                                tooltip: 'Challenge $name',
+                                onPressed: () {
+                                  HapticFeedback.heavyImpact();
+                                  if (targetUserId == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('$name is a Hall of Fame legend. Challenge nearby live racers!')),
+                                    );
+                                    return;
+                                  }
+                                  _showDuelChallengeSheet(
+                                    targetUserId: targetUserId,
+                                    targetName: name,
+                                    sport: _selectedSport,
+                                  );
+                                },
                               ),
-                              tooltip: 'Challenge $name',
-                              onPressed: () {
-                                HapticFeedback.heavyImpact();
-                                context.push('/create-race?challengeName=${Uri.encodeComponent(name)}');
-                              },
-                            ),
                           ],
                         ),
                       );
@@ -490,6 +505,253 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with Sing
                 ),
               ),
       ),
+    );
+  }
+
+  Future<void> _showDuelChallengeSheet({
+    required String targetUserId,
+    required String targetName,
+    required String sport,
+  }) async {
+    HapticFeedback.heavyImpact();
+    int selectedDistanceM = 500;
+    bool isDispatching = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -4)),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderSubtle,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Challenge Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryGreen.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.flash_on, color: AppColors.primaryGreen, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'INSTANT SPRINT DUEL',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            '1v1 Head-to-Head Live GPS Challenge',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Competitor Summary Card
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.primaryGreen.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: AppColors.primaryGreen.withValues(alpha: 0.2),
+                          child: Text(
+                            targetName.isNotEmpty ? targetName.substring(0, 1).toUpperCase() : 'R',
+                            style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                targetName,
+                                style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Global Leaderboard • ${sport.toUpperCase()}',
+                                style: const TextStyle(color: AppColors.primaryGreen, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Distance Selector Label
+                  const Text(
+                    'TARGET DUEL DISTANCE',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Distance Chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [100, 250, 500, 1000, 2500, 5000].map((d) {
+                      final isSel = selectedDistanceM == d;
+                      final label = d < 1000 ? '${d}m' : '${(d / 1000).toStringAsFixed(d % 1000 == 0 ? 0 : 1)}km';
+                      return ChoiceChip(
+                        label: Text(label),
+                        selected: isSel,
+                        selectedColor: AppColors.primaryGreen,
+                        backgroundColor: AppColors.surfaceElevated,
+                        labelStyle: TextStyle(
+                          color: isSel ? Colors.black : AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                        onSelected: (val) {
+                          if (val) setSheetState(() => selectedDistanceM = d);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // CTA Button
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.greenGradient,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: AppColors.greenGlowShadow,
+                    ),
+                    child: ElevatedButton(
+                      onPressed: isDispatching
+                          ? null
+                          : () async {
+                              setSheetState(() => isDispatching = true);
+                              try {
+                                if (SupabaseService.currentUser == null) {
+                                  await SupabaseService.ensureAuthenticatedSession();
+                                }
+                                final inviterId = SupabaseService.currentUser?.id;
+                                if (inviterId == null) {
+                                  throw Exception('User authentication failed');
+                                }
+                                final inviterName = SupabaseService.currentUser?.userMetadata?['display_name'] ?? 'Racer Pilot';
+                                final distLabel = selectedDistanceM < 1000
+                                    ? '${selectedDistanceM}m'
+                                    : '${(selectedDistanceM / 1000).toStringAsFixed(selectedDistanceM % 1000 == 0 ? 0 : 1)}km';
+
+                                final raceRepo = ref.read(raceRepositoryProvider);
+                                final raceId = await raceRepo.createRace(
+                                  sport: sport,
+                                  mode: 'head_to_head',
+                                  participantLimit: 2,
+                                  visibility: 'invitation_only',
+                                  configuration: {
+                                    'course_name': '$distLabel Street Duel',
+                                    'target_distance_m': selectedDistanceM,
+                                    'challengee_id': targetUserId,
+                                    'challengee_name': targetName,
+                                    'inviter_id': inviterId,
+                                    'inviter_name': inviterName,
+                                  },
+                                );
+
+                                // Dispatch invitation
+                                await SupabaseService.client.from('race_invitations').insert({
+                                  'race_id': raceId,
+                                  'inviter_id': inviterId,
+                                  'invitee_id': targetUserId,
+                                  'status': 'pending',
+                                });
+
+                                if (sheetContext.mounted) {
+                                  Navigator.of(sheetContext).pop();
+                                }
+                                if (mounted) {
+                                  context.push('/lobby/$raceId?challengeTarget=${Uri.encodeComponent(targetName)}');
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  setSheetState(() => isDispatching = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(backgroundColor: AppColors.accentRose, content: Text('Failed to send challenge: $e')),
+                                  );
+                                }
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: isDispatching
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black))
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.flash_on, color: Colors.black, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  '⚡ ISSUE DUEL CHALLENGE',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 0.8, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

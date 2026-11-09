@@ -23,6 +23,7 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
   bool _isLoading = true;
   bool _isTogglingReady = false;
   bool _isPerformingHostAction = false;
+  bool _isChallengeDeclined = false;
   RealtimeChannel? _realtimeChannel;
   int _countdownSeconds = 5;
   Timer? _countdownTimer;
@@ -44,6 +45,28 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
     super.dispose();
   }
 
+  Future<void> _checkInvitationStatus() async {
+    if (_hasNavigatedAway || !mounted) return;
+    if (_race == null) return;
+    final isChallenge = _race!.mode == 'head_to_head' || _race!.configuration['challengee_id'] != null;
+    if (!isChallenge) return;
+
+    try {
+      final list = await SupabaseService.client
+          .from('race_invitations')
+          .select('status')
+          .eq('race_id', widget.raceId)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (list.isNotEmpty && mounted) {
+        final st = list.first['status'] as String?;
+        if (st == 'declined' && !_isChallengeDeclined) {
+          setState(() => _isChallengeDeclined = true);
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadRaceAndSubscribe() async {
     final repo = ref.read(raceRepositoryProvider);
     try {
@@ -54,6 +77,7 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
           _isLoading = false;
         });
         _checkStateTransitions(race);
+        _checkInvitationStatus();
       }
 
       // Realtime subscription
@@ -61,6 +85,7 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
         if (mounted) {
           setState(() => _race = updatedRace);
           _checkStateTransitions(updatedRace);
+          _checkInvitationStatus();
         }
       });
 
@@ -73,6 +98,7 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
           if (mounted && !_hasNavigatedAway) {
             setState(() => _race = updated);
             _checkStateTransitions(updated);
+            _checkInvitationStatus();
           }
         } catch (_) {}
       });
@@ -165,6 +191,18 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
   }
 
   Future<void> _handleStartRaceNow() async {
+    if (_race == null) return;
+    final isChallenge = _race!.mode == 'head_to_head' || _race!.configuration['challengee_id'] != null;
+    if ((isChallenge || _race!.participantLimit > 1) && _race!.participants.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.accentRose,
+          content: Text('Cannot start race yet! Waiting for opponent or other racers to join.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isPerformingHostAction = true);
     try {
       final repo = ref.read(raceRepositoryProvider);
@@ -664,9 +702,11 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
 
                     Builder(
                       builder: (context) {
-                        final isWaitingOpponent = _race!.mode == 'head_to_head' && _race!.participants.length == 1;
+                        final isChallenge = _race!.mode == 'head_to_head' || _race!.configuration['challengee_id'] != null;
+                        final isWaitingOpponent = isChallenge && _race!.participants.length < 2;
+                        final isWaitingMulti = !isChallenge && _race!.participantLimit > 1 && _race!.participants.length < 2;
                         final challengeeName = (_race!.configuration['challengee_name'] as String?) ?? 'Opponent';
-                        final totalItems = isWaitingOpponent ? 2 : _race!.participants.length;
+                        final totalItems = (isWaitingOpponent || isWaitingMulti) ? 2 : _race!.participants.length;
 
                         return Expanded(
                           child: ListView.separated(
@@ -674,6 +714,35 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
                             separatorBuilder: (_, __) => const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               if (isWaitingOpponent && index == 1) {
+                                if (_isChallengeDeclined) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accentRose.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: AppColors.accentRose, width: 1.5),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          backgroundColor: AppColors.accentRose.withValues(alpha: 0.2),
+                                          child: const Icon(Icons.close, color: AppColors.accentRose, size: 20),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(challengeeName, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                              const SizedBox(height: 3),
+                                              const Text('Challenge was declined by opponent', style: TextStyle(color: AppColors.accentRose, fontSize: 11, fontWeight: FontWeight.w600)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                   decoration: BoxDecoration(
@@ -716,6 +785,31 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
                                         width: 18,
                                         height: 18,
                                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              if (isWaitingMulti && index == 1) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.borderSubtle),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: Colors.black26,
+                                        child: Icon(Icons.person_add_outlined, color: AppColors.textMuted, size: 20),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Waiting for other racers to join...',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontStyle: FontStyle.italic),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -833,37 +927,70 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
                     if (isHost) ...[
                       Builder(
                         builder: (context) {
-                          final isWaitingOpponent = _race!.mode == 'head_to_head' && _race!.participants.length == 1;
+                          final isChallenge = _race!.mode == 'head_to_head' || _race!.configuration['challengee_id'] != null;
+                          final isWaitingOpponent = isChallenge && _race!.participants.length < 2;
+                          final isWaitingMulti = !isChallenge && _race!.participantLimit > 1 && _race!.participants.length < 2;
                           final challengeeName = (_race!.configuration['challengee_name'] as String?) ?? 'OPPONENT';
+
+                          if (_isChallengeDeclined) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.accentRose,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final repo = ref.read(raceRepositoryProvider);
+                                  await repo.cancelRace(widget.raceId);
+                                  if (context.mounted) context.go('/home');
+                                },
+                                icon: const Icon(Icons.cancel, size: 20, color: Colors.white),
+                                label: Text(
+                                  '${challengeeName.toUpperCase()} DECLINED • DISBAND LOBBY',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final bool canStart = !isWaitingOpponent && !isWaitingMulti && !isCountdown && !_isPerformingHostAction;
 
                           return Container(
                             decoration: BoxDecoration(
-                              gradient: isWaitingOpponent
-                                  ? const LinearGradient(colors: [Color(0xFF64748B), Color(0xFF475569)])
-                                  : AppColors.greenGradient,
+                              gradient: canStart
+                                  ? AppColors.greenGradient
+                                  : const LinearGradient(colors: [Color(0xFF64748B), Color(0xFF475569)]),
                               borderRadius: BorderRadius.circular(14),
-                              boxShadow: isWaitingOpponent ? null : AppColors.greenGlowShadow,
+                              boxShadow: canStart ? AppColors.greenGlowShadow : null,
                             ),
                             child: ElevatedButton.icon(
-                              onPressed: (_isPerformingHostAction || isCountdown || isWaitingOpponent) ? null : _handleStartRaceNow,
-                              icon: isWaitingOpponent
+                              onPressed: canStart ? _handleStartRaceNow : null,
+                              icon: (isWaitingOpponent || isWaitingMulti)
                                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                   : const Icon(Icons.flash_on, size: 20, color: Colors.black),
                               label: Text(
                                 isWaitingOpponent
                                     ? 'AWAITING ${challengeeName.toUpperCase()} TO ACCEPT...'
-                                    : 'IGNITE ENGINES • START RACE',
+                                    : (isWaitingMulti
+                                        ? 'WAITING FOR RACERS TO JOIN (1/${_race!.participantLimit})...'
+                                        : 'IGNITE ENGINES • START RACE'),
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0.8,
-                                  color: isWaitingOpponent ? Colors.white : Colors.black,
+                                  color: canStart ? Colors.black : Colors.white,
                                 ),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 shadowColor: Colors.transparent,
-                                foregroundColor: isWaitingOpponent ? Colors.white : Colors.black,
+                                foregroundColor: canStart ? Colors.black : Colors.white,
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),

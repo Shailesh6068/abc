@@ -79,8 +79,9 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
     super.initState();
     _selectedRouteId = _sampleRoutes.keys.first;
     if (widget.challengeUserId != null) {
-      _selectedMode = 'distance_race';
+      _selectedMode = 'head_to_head';
       _participantLimit = 2;
+      _visibility = 'invitation_only';
     }
     _fetchCurrentLocation();
   }
@@ -191,16 +192,17 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
       }
 
       final repo = ref.read(raceRepositoryProvider);
+      final isChallenge = widget.challengeUserId != null;
       final raceId = await repo.createRace(
         sport: _selectedSport,
-        mode: _selectedMode,
-        visibility: _visibility,
-        participantLimit: _participantLimit,
+        mode: isChallenge ? 'head_to_head' : _selectedMode,
+        visibility: isChallenge ? 'invitation_only' : _visibility,
+        participantLimit: isChallenge ? 2 : _participantLimit,
         routeId: _selectedRouteId,
         configuration: {
           'course_name': courseName,
           'duration_minutes': _selectedMode == 'time_trial' ? _durationMinutes : null,
-          'target_distance_m': _selectedMode == 'distance_race' ? _targetDistanceM : null,
+          'target_distance_m': (_selectedMode == 'distance_race' || isChallenge) ? _targetDistanceM : null,
           'destination_lat': _selectedMode == 'destination_race' ? destLat : null,
           'destination_lng': _selectedMode == 'destination_race' ? destLng : null,
           'destination_name': _selectedMode == 'destination_race' ? destName : null,
@@ -210,11 +212,28 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
               ? _customRoutePoints!.map((p) => [p.latitude, p.longitude]).toList()
               : null,
           'challengee_id': widget.challengeUserId,
+          'challengee_name': widget.challengeUserName,
         },
       );
 
+      // If challenging a user, dispatch race_invitations record
+      if (isChallenge) {
+        final currentUserId = SupabaseService.currentUser?.id;
+        if (currentUserId != null) {
+          await SupabaseService.client.from('race_invitations').insert({
+            'race_id': raceId,
+            'inviter_id': currentUserId,
+            'invitee_id': widget.challengeUserId,
+            'status': 'pending',
+          });
+        }
+      }
+
       if (mounted) {
-        context.go('/lobby/$raceId');
+        final query = widget.challengeUserName != null
+            ? '?challengeTarget=${Uri.encodeComponent(widget.challengeUserName!)}'
+            : '';
+        context.go('/lobby/$raceId$query');
       }
     } catch (e) {
       if (mounted) {

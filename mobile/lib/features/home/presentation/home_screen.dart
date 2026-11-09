@@ -336,6 +336,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         final inviteId = inv['id'] as String;
         if (_lastDismissedInviteId == inviteId) return;
 
+        // Skip if race is cancelled or completed
+        final raceData = inv['races'] as Map<String, dynamic>?;
+        final raceStatus = raceData?['status'] as String?;
+        if (raceStatus != null && raceStatus != 'WAITING') {
+          _lastDismissedInviteId = inviteId;
+          return;
+        }
+
         _showIncomingDuelDialog(inv);
       }
     } catch (e) {
@@ -708,12 +716,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                                     : '${(selectedDistanceM / 1000).toStringAsFixed(selectedDistanceM % 1000 == 0 ? 0 : 1)}km';
 
                                 final raceRepo = ref.read(raceRepositoryProvider);
-                                // 1. Create head_to_head race
+                                // 1. Create head_to_head race (invitation only so it doesn't clutter public open rooms)
                                 final raceId = await raceRepo.createRace(
                                   sport: sport,
                                   mode: 'head_to_head',
                                   participantLimit: 2,
-                                  visibility: 'public',
+                                  visibility: 'invitation_only',
                                   configuration: {
                                     'course_name': '$distLabel Street Duel',
                                     'target_distance_m': selectedDistanceM,
@@ -732,8 +740,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                                   'status': 'pending',
                                 });
 
-                                if (mounted) {
+                                if (sheetContext.mounted) {
                                   Navigator.of(sheetContext).pop();
+                                }
+                                if (mounted) {
                                   context.push('/lobby/$raceId?challengeTarget=${Uri.encodeComponent(player.displayName)}');
                                 }
                               } catch (e) {
