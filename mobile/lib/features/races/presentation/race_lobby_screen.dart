@@ -62,6 +62,14 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
         final st = list.first['status'] as String?;
         if (st == 'declined' && !_isChallengeDeclined) {
           setState(() => _isChallengeDeclined = true);
+        } else if (st == 'accepted' && !_isChallengeDeclined) {
+          // Opponent accepted: auto-start the duel if host and both players are in
+          final currentUserId = SupabaseService.currentUser?.id;
+          final isHost = _race!.creatorId == currentUserId;
+          if (isHost && _race!.participants.length >= 2 && _race!.status == 'WAITING' && !_isPerformingHostAction) {
+            debugPrint('[Duel] Invitation accepted & 2 players in lobby — auto-starting race countdown!');
+            _handleStartRaceNow();
+          }
         }
       }
     } catch (_) {}
@@ -110,6 +118,10 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
   void _checkStateTransitions(RaceModel race) {
     if (_hasNavigatedAway || !mounted) return;
 
+    final isChallenge = race.mode == 'head_to_head' || race.configuration['challengee_id'] != null;
+    final currentUserId = SupabaseService.currentUser?.id;
+    final isHost = race.creatorId == currentUserId;
+
     if (race.status == 'COUNTDOWN') {
       _startCountdown();
     } else if (race.status == 'IN_PROGRESS') {
@@ -123,6 +135,10 @@ class _RaceLobbyScreenState extends ConsumerState<RaceLobbyScreen> {
         const SnackBar(content: Text('This race lobby was cancelled by the host.')),
       );
       context.go('/home');
+    } else if (isChallenge && isHost && race.participants.length >= 2 && race.status == 'WAITING' && !_isPerformingHostAction) {
+      // Auto-start duel countdown as soon as opponent accepts and joins!
+      debugPrint('[Duel] Both racers in lobby - triggering countdown automatically!');
+      _handleStartRaceNow();
     }
   }
 

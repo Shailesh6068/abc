@@ -123,6 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _initLocationAndFetch();
+      _checkPendingInvitations();
     }
   }
 
@@ -744,6 +745,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                                   Navigator.of(sheetContext).pop();
                                 }
                                 if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: AppColors.primaryGreen,
+                                      duration: const Duration(seconds: 4),
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.flash_on, color: Colors.black, size: 20),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Challenge sent to ${player.displayName}! Waiting in lobby for acceptance...',
+                                              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
                                   context.push('/lobby/$raceId?challengeTarget=${Uri.encodeComponent(player.displayName)}');
                                 }
                               } catch (e) {
@@ -844,8 +863,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       );
       if (mounted) setState(() => _nearbyPlayers = players);
 
-      // Fetch open race lobbies & active user lobby
-      final openLobbies = await raceRepo.getOpenRaces(sport: _selectedSport);
+      // Fetch open race lobbies & active user lobby (all active lobbies for radar & matchmaking)
+      final openLobbies = await raceRepo.getOpenRaces();
       final active = await raceRepo.getMyActiveLobby();
 
       if (mounted) {
@@ -2303,12 +2322,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _radarSubTab == 0
-                                    ? AppColors.primaryGreen.withValues(alpha: 0.15)
-                                    : Colors.transparent,
+                                    ? AppColors.primaryGreen.withValues(alpha: 0.16)
+                                    : AppColors.surfaceElevated,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: _radarSubTab == 0 ? AppColors.primaryGreen : AppColors.borderSubtle,
-                                  width: 1.2,
+                                  width: _radarSubTab == 0 ? 1.5 : 1.0,
                                 ),
                               ),
                               child: Row(
@@ -2347,12 +2366,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _radarSubTab == 1
-                                    ? AppColors.primaryCyan.withValues(alpha: 0.15)
-                                    : Colors.transparent,
+                                    ? AppColors.primaryCyan.withValues(alpha: 0.16)
+                                    : AppColors.surfaceElevated,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: _radarSubTab == 1 ? AppColors.primaryCyan : AppColors.borderSubtle,
-                                  width: 1.2,
+                                  width: _radarSubTab == 1 ? 1.5 : 1.0,
                                 ),
                               ),
                               child: Row(
@@ -2380,32 +2399,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                         const SizedBox(width: 8),
 
                         // Scan Refresh Button
-                        if (_isLoading)
-                          const SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: Padding(
-                              padding: EdgeInsets.all(7),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        else
-                          Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryGreen.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: IconButton(
-                              onPressed: () {
-                                HapticFeedback.selectionClick();
-                                _initLocationAndFetch();
-                              },
-                              icon: const Icon(Icons.refresh, size: 18, color: AppColors.primaryGreen),
-                              tooltip: 'Scan Now',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                            ),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.primaryGreen.withValues(alpha: 0.25)),
                           ),
+                          child: _isLoading
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    _initLocationAndFetch();
+                                  },
+                                  icon: const Icon(Icons.refresh, size: 18, color: AppColors.primaryGreen),
+                                  tooltip: 'Scan Now',
+                                  padding: EdgeInsets.zero,
+                                ),
+                        ),
                       ],
                     ),
                   ),
@@ -3730,13 +3752,34 @@ class _RadarGridPainter extends CustomPainter {
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
-    void drawHudText(String text, Offset pos, Color color, {double fontSize = 10, bool bold = true}) {
+    void drawHudText(
+      String text,
+      Offset pos,
+      Color color, {
+      double fontSize = 10,
+      bool bold = true,
+      bool withBadge = false,
+      Color? badgeColor,
+    }) {
       textPainter.text = TextSpan(
         text: text,
-        style: TextStyle(color: color, fontSize: fontSize, fontWeight: bold ? FontWeight.bold : FontWeight.normal, letterSpacing: 0.8),
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          letterSpacing: 0.8,
+        ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(pos.dx - textPainter.width / 2, pos.dy - textPainter.height / 2));
+      final textOffset = Offset(pos.dx - textPainter.width / 2, pos.dy - textPainter.height / 2);
+      if (withBadge) {
+        final rrect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(textOffset.dx - 4, textOffset.dy - 2, textPainter.width + 8, textPainter.height + 4),
+          const Radius.circular(4),
+        );
+        canvas.drawRRect(rrect, Paint()..color = badgeColor ?? const Color(0xDD030A12));
+      }
+      textPainter.paint(canvas, textOffset);
     }
 
     drawHudText('N', Offset(center.dx, center.dy - maxRadius - 17), AppColors.primaryGreen, fontSize: 10);
@@ -3863,7 +3906,14 @@ class _RadarGridPainter extends CustomPainter {
         canvas.drawCircle(blipOffset, 18, Paint()..color = blipColor.withValues(alpha: 0.3)..style = PaintingStyle.stroke..strokeWidth = 1.5);
 
         final approxDist = (distFrac * searchRadiusM).round();
-        drawHudText('${approxDist}m', Offset(blipOffset.dx, blipOffset.dy - 14), Colors.white, fontSize: 8);
+        drawHudText(
+          '${approxDist}m',
+          Offset(blipOffset.dx, blipOffset.dy - 14),
+          AppColors.primaryGreen,
+          fontSize: 9,
+          withBadge: true,
+          badgeColor: const Color(0xEE04101A),
+        );
       } else {
         // Standard Luminous Blip
         canvas.drawCircle(blipOffset, 7, Paint()..color = blipColor.withValues(alpha: 0.25));
@@ -3898,12 +3948,27 @@ class _RadarGridPainter extends CustomPainter {
       if (isSweepingOver) {
         canvas.drawCircle(roomOffset, 14, Paint()..color = roomColor.withValues(alpha: 0.4));
         canvas.drawPath(diamondPath, Paint()..color = Colors.white);
-        drawHudText('ROOM (${race.participants.length}/${race.participantLimit})', Offset(roomOffset.dx, roomOffset.dy - 14), Colors.white, fontSize: 8);
+        drawHudText(
+          'ROOM (${race.participants.length}/${race.participantLimit})',
+          Offset(roomOffset.dx, roomOffset.dy - 14),
+          const Color(0xFF00E5FF),
+          fontSize: 8.5,
+          withBadge: true,
+          badgeColor: const Color(0xEE021323),
+        );
       } else {
         canvas.drawCircle(roomOffset, 7, Paint()..color = roomColor.withValues(alpha: 0.25));
         canvas.drawPath(diamondPath, Paint()..color = roomColor);
         canvas.drawCircle(roomOffset, 1.5, Paint()..color = Colors.white);
-        drawHudText('ROOM', Offset(roomOffset.dx, roomOffset.dy + 10), roomColor, fontSize: 7, bold: true);
+        drawHudText(
+          'ROOM',
+          Offset(roomOffset.dx, roomOffset.dy + 11),
+          roomColor,
+          fontSize: 7.5,
+          bold: true,
+          withBadge: true,
+          badgeColor: const Color(0xDD021323),
+        );
       }
     }
 

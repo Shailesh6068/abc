@@ -169,6 +169,17 @@ class _LiveRaceScreenState extends ConsumerState<LiveRaceScreen> {
 
         if (updatedRace.status == 'COMPLETED' || updatedRace.status == 'FINISHING') {
           context.go('/results/${widget.raceId}');
+        } else if (updatedRace.status == 'CANCELLED' || updatedRace.status == 'ABORTED') {
+          _isDisposed = true;
+          _positionStream?.cancel();
+          _tickerTimer?.cancel();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: AppColors.accentRose,
+              content: Text('Race was cancelled or disbanded.'),
+            ),
+          );
+          context.go('/home');
         }
       });
     } catch (e) {

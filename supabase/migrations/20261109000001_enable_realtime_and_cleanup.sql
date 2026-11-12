@@ -15,3 +15,4 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.race_invitations;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.races;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.race_participants;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.player_presence;
+

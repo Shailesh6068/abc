@@ -219,8 +219,8 @@ class RaceRepository {
       await SupabaseService.ensureAuthenticatedSession();
     }
     try {
-      // Discard any abandoned lobby created more than 10 minutes ago
-      final cutoff = DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String();
+      // Cutoff in UTC: keep active waiting lobbies within last 6 hours
+      final cutoff = DateTime.now().toUtc().subtract(const Duration(hours: 6)).toIso8601String();
       var query = _client
           .from('races')
           .select('*, race_participants(*, profiles(display_name, avatar_url))')
@@ -229,7 +229,7 @@ class RaceRepository {
           .neq('mode', 'head_to_head')
           .gte('created_at', cutoff);
 
-      if (sport != null && sport != 'all') {
+      if (sport != null && sport.isNotEmpty && sport != 'all') {
         query = query.eq('sport', sport);
       }
 
@@ -250,15 +250,25 @@ class RaceRepository {
             .where((p) => p.status != 'left' && p.status != 'dnf')
             .toList();
 
-        // Discard empty or disbanded lobbies
-        if (partsList.isEmpty) continue;
+        // If participants list is temporarily empty, add host as fallback so room is visible
+        final creatorId = item['creator_id'] as String? ?? '';
+        final finalParts = partsList.isNotEmpty
+            ? partsList
+            : [
+                RaceParticipant(
+                  userId: creatorId,
+                  displayName: 'Host Racer',
+                  status: 'ready',
+                  joinedAt: DateTime.now(),
+                ),
+              ];
 
-        races.add(RaceModel.fromJson(Map<String, dynamic>.from(item as Map), participants: partsList));
+        races.add(RaceModel.fromJson(Map<String, dynamic>.from(item as Map), participants: finalParts));
       }
       return races;
     } catch (e) {
       return _localRaces.values
-          .where((r) => r.status == 'WAITING' && r.mode != 'head_to_head' && (sport == null || sport == 'all' || r.sport == sport) && r.participants.isNotEmpty)
+          .where((r) => r.status == 'WAITING' && r.mode != 'head_to_head' && (sport == null || sport.isEmpty || sport == 'all' || r.sport == sport) && r.participants.isNotEmpty)
           .toList();
     }
   }
@@ -269,8 +279,8 @@ class RaceRepository {
       final user = SupabaseService.currentUser;
       if (user == null) return null;
 
-      // Tight 15-minute cutoff so old / stale lobbies never linger
-      final cutoff = DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String();
+      // Active lobby within last 6 hours (in UTC)
+      final cutoff = DateTime.now().toUtc().subtract(const Duration(hours: 6)).toIso8601String();
       final data = await _client
           .from('race_participants')
           .select('race_id, status, races!inner(*, race_participants(*, profiles(display_name, avatar_url)))')
@@ -417,7 +427,7 @@ class RaceRepository {
     try {
       await _client.from('races').update({
         'status': 'COMPLETED',
-        'completed_at': DateTime.now().toIso8601String(),
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', raceId);
     } catch (_) {}
 
@@ -437,7 +447,7 @@ class RaceRepository {
     try {
       await _client.from('races').update({
         'status': 'CANCELLED',
-        'completed_at': DateTime.now().toIso8601String(),
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', raceId);
     } catch (e) {
       debugPrint('[RaceRepository] races cancel update note: $e');

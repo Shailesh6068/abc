@@ -21,7 +21,7 @@ class DiscoveryRepository {
     required String sport,
     bool isAvailable = true,
   }) async {
-    var user = _client.auth.currentUser;
+    var user = SupabaseService.currentUser ?? _client.auth.currentUser;
     if (user == null) {
       user = await SupabaseService.ensureAuthenticatedSession();
       if (user == null) {
@@ -67,13 +67,24 @@ class DiscoveryRepository {
     String? sport,
     int limit = 30,
   }) async {
-    var user = _client.auth.currentUser;
+    // Always ensure session is active before querying
+    var user = SupabaseService.currentUser ?? _client.auth.currentUser;
     if (user == null) {
       user = await SupabaseService.ensureAuthenticatedSession();
       if (user == null) {
         debugPrint('[Discovery] getNearbyPlayers: User not authenticated');
         return [];
       }
+    }
+
+    // Always ensure discovery_enabled = true for this user so they appear on others' radars
+    try {
+      await _client.from('player_preferences').upsert({
+        'user_id': user.id,
+        'discovery_enabled': true,
+      }, onConflict: 'user_id');
+    } catch (e) {
+      debugPrint('[Discovery] Could not ensure discovery_enabled: $e');
     }
 
     try {
@@ -90,19 +101,23 @@ class DiscoveryRepository {
       }
 
       final response = await _client.rpc('get_nearby_players', params: params);
+      debugPrint('[Discovery] get_nearby_players raw response count: ${response is List ? response.length : 0}');
 
       if (response is List && response.isNotEmpty) {
-        final currentUserId = _client.auth.currentUser?.id;
+        // Use the actual auth user ID (not fallback) for self-exclusion since SQL already excludes by auth.uid()
+        // But also filter client-side in case of session mismatch
+        final currentUserId = user.id;
+
         final realPlayers = response
             .map((item) {
               final map = Map<String, dynamic>.from(item as Map);
               return NearbyPlayer.fromJson(map, isBot: false);
             })
-            // 1. Strictly exclude current user's own device
+            // Client-side self-exclusion guard (SQL already handles this, belt-and-suspenders)
             .where((p) => p.userId != currentUserId)
             .toList();
 
-        // 2. Strictly deduplicate by user_id so no player ever appears twice
+        // Deduplicate strictly by user_id only (don't filter by name — same names can be different people)
         final seenUserIds = <String>{};
         final uniquePlayers = <NearbyPlayer>[];
         for (final p in realPlayers) {
